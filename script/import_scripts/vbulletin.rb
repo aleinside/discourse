@@ -9,6 +9,7 @@ class ImportScripts::VBulletin < ImportScripts::Base
   DATABASE = "iref"
   TIMEZONE = "Asia/Kolkata"
   ATTACHMENT_DIR = '/path/to/your/attachment/folder'
+  TABLE_PREFIX = ""
 
   def initialize
     super
@@ -63,7 +64,7 @@ class ImportScripts::VBulletin < ImportScripts::Base
     batches(BATCH_SIZE) do |offset|
       users = mysql_query <<-SQL
           SELECT userid, username, homepage, usertitle, usergroupid, joindate, email
-            FROM user
+            FROM #{TABLE_PREFIX}user
         ORDER BY userid
            LIMIT #{BATCH_SIZE}
           OFFSET #{offset}
@@ -98,7 +99,7 @@ class ImportScripts::VBulletin < ImportScripts::Base
   def import_profile_picture(old_user, imported_user)
     query = mysql_query <<-SQL
         SELECT filedata, filename
-          FROM customavatar
+          FROM #{TABLE_PREFIX}customavatar
          WHERE userid = #{old_user["userid"]}
       ORDER BY dateline DESC
          LIMIT 1
@@ -127,7 +128,7 @@ class ImportScripts::VBulletin < ImportScripts::Base
   def import_profile_background(old_user, imported_user)
     query = mysql_query <<-SQL
         SELECT filedata, filename
-          FROM customprofilepic
+          FROM #{TABLE_PREFIX}customprofilepic
          WHERE userid = #{old_user["userid"]}
       ORDER BY dateline DESC
          LIMIT 1
@@ -202,8 +203,8 @@ class ImportScripts::VBulletin < ImportScripts::Base
       topics = mysql_query <<-SQL
           SELECT t.threadid threadid, t.title title, forumid, open, postuserid, t.dateline dateline, views, t.visible visible, sticky,
                  p.pagetext raw
-            FROM thread t
-            JOIN post p ON p.postid = t.firstpostid
+            FROM #{TABLE_PREFIX}thread t
+            JOIN #{TABLE_PREFIX}post p ON p.postid = t.firstpostid
         ORDER BY t.threadid
            LIMIT #{BATCH_SIZE}
           OFFSET #{offset}
@@ -237,15 +238,15 @@ class ImportScripts::VBulletin < ImportScripts::Base
     puts "", "importing posts..."
 
     # make sure `firstpostid` is indexed
-    mysql_query("CREATE INDEX firstpostid_index ON thread (firstpostid)")
+    mysql_query("CREATE INDEX firstpostid_index ON #{TABLE_PREFIX}thread (firstpostid)")
 
-    post_count = mysql_query("SELECT COUNT(postid) count FROM post WHERE postid NOT IN (SELECT firstpostid FROM thread)").first["count"]
+    post_count = mysql_query("SELECT COUNT(postid) count FROM #{TABLE_PREFIX}post WHERE postid NOT IN (SELECT firstpostid FROM #{TABLE_PREFIX}thread)").first["count"]
 
     batches(BATCH_SIZE) do |offset|
       posts = mysql_query <<-SQL
           SELECT postid, userid, threadid, pagetext raw, dateline, visible, parentid
-            FROM post
-           WHERE postid NOT IN (SELECT firstpostid FROM thread)
+            FROM #{TABLE_PREFIX}post
+           WHERE postid NOT IN (SELECT firstpostid FROM #{TABLE_PREFIX}thread)
         ORDER BY postid
            LIMIT #{BATCH_SIZE}
           OFFSET #{offset}
@@ -278,7 +279,7 @@ class ImportScripts::VBulletin < ImportScripts::Base
   def find_upload(post, attachment_id)
     sql = "SELECT a.attachmentid attachment_id, a.userid user_id, a.filedataid file_id, a.filename filename,
                   a.caption caption
-             FROM attachment a
+             FROM #{TABLE_PREFIX}attachment a
             WHERE a.attachmentid = #{attachment_id}"
     results = mysql_query(sql)
 
@@ -314,7 +315,7 @@ class ImportScripts::VBulletin < ImportScripts::Base
     puts '', 'importing attachments...'
 
     current_count = 0
-    total_count = mysql_query("SELECT COUNT(postid) count FROM post WHERE postid NOT IN (SELECT firstpostid FROM thread)").first["count"]
+    total_count = mysql_query("SELECT COUNT(postid) count FROM #{TABLE_PREFIX}post WHERE postid NOT IN (SELECT firstpostid FROM #{TABLE_PREFIX}thread)").first["count"]
 
     success_count = 0
     fail_count = 0
